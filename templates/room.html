@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Room: {{ room.name }}{% endblock %}
+{% block content %}
+<h2>Room: {{ room.name }}</h2>
+
+<div class="grid">
+  <section>
+    <h3>Chat</h3>
+    <div id="chatlog">
+      {% for m in messages %}
+        <div><b>{{ m.user.username }}:</b> {{ m.content }}</div>
+      {% endfor %}
+    </div>
+    {% if user.is_authenticated %}
+      <input id="chatmsg" placeholder="Type a message..." />
+      <button id="sendbtn">Send</button>
+    {% else %}
+      <p>Please login to chat.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h3>Video</h3>
+    <div class="video-grid">
+      <video id="localVideo" autoplay playsinline muted></video>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+    <div class="controls">
+      <button id="startCall">Start Call</button>
+      <button id="endCall">End Call</button>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const roomName = "{{ room.name }}";
+const wsScheme = (window.location.protocol === "https:") ? "wss" : "ws";
+const roomParam = encodeURIComponent(roomName);
+const wsUrl = `${wsScheme}://${window.location.host}/ws/chat/${roomParam}/`;
+const socket = new WebSocket(wsUrl);
+
+// Add a per-tab sender id and queue sends until WS is open
+const myId = Math.random().toString(36).slice(2);
+let wsOpen = false;
+const sendQueue = [];
+socket.onopen = () => { wsOpen = true; while (sendQueue.length) socket.send(JSON.stringify(sendQueue.shift())); };
+socket.onclose = () => { wsOpen = false; };
+
+function sendWS(payload) {
+    payload.sender = myId; // tag messages we send
+    if (wsOpen && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(payload));
+    } else {
+        console.warn("WebSocket not open; queueing", payload.type);
+        sendQueue.push(payload);
+    }
+}
+
+// Chat
+const log = document.getElementById("chatlog");
+const msg = document.getElementById("chatmsg");
+const sendBtn = document.getElementById("sendbtn");
+if (sendBtn) {
+  sendBtn.onclick = () => {
+    const text = msg.value.trim();
+    if (!text) return;
+    sendWS({ type: "chat.message", message: text });
+    msg.value = "";
+  };
+}
+
+// WebRTC
+let pc = null;
+let localStream = null;
+let pendingCandidates = [];
+
+const startBtn = document.getElementById("startCall");
+const endBtn = document.getElementById("endCall");
+const localVideo = document.getElementById("localVideo");
+const remoteVideo = document.getElementById("remoteVideo");
+
+async function ensurePeer() {
+  if (pc) return;
+  pc = new RTCPeerConnection({
+    iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }]
+  });
+  pc.ontrack = (e) => { remoteVideo.srcObject = e.streams[0]; };
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+        // Serialize candidate safely
+        sendWS({ type: "webrtc.ice", candidate: e.candidate.toJSON() });
+    }
+  };
+  localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+  localVideo.srcObject = localStream;
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+}
+
+async function startCall() {
+  await ensurePeer();
+  if (pc.signalingState !== "stable") {
+    console.warn("Peer not stable, can't start. State:", pc.signalingState);
+    return;
+  }
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  sendWS({ type: "webrtc.offer", offer });
+}
+
+async function handleOffer(offer) {
+  await ensurePeer();
+
+  // Resolve glare: roll back any local offer before accepting remote
+  if (pc.signalingState !== "stable") {
+      try { await pc.setLocalDescription({ type: "rollback" }); } catch (_) {}
+      console.warn("Rolled back local offer due to glare.");
+  }
+
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  sendWS({ type: "webrtc.answer", answer });
+
+  // Flush queued ICE now that remote description exists
+  for (const c of pendingCandidates) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (err) { console.warn("ICE flush failed:", err); }
+  }
+  pendingCandidates = [];
+}
+
+async function handleAnswer(answer) {
+  if (!pc || pc.signalingState !== "have-local-offer") {
+      console.warn("Ignoring answer in state:", pc ? pc.signalingState : "no pc");
+      return;
+  }
+  await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  for (const c of pendingCandidates) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (err) { console.warn("ICE flush failed:", err); }
+  }
+  pendingCandidates = [];
+}
+
+function handleRemoteIce(candidate) {
+  if (!pc || !pc.remoteDescription) {
+      // Queue until remote description is set
+      pendingCandidates.push(candidate);
+      return;
+  }
+  pc.addIceCandidate(new RTCIceCandidate(candidate))
+    .catch(err => console.warn("addIceCandidate failed:", err));
+}
+
+socket.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  // Ignore our own signaling to prevent glare and wrong-state errors
+  if (data.sender && data.sender === myId) return;
+
+  if (data.type === "chat.message") {
+    const el = document.createElement("div");
+    el.innerHTML = `<b>${data.user}:</b> ${data.message}`;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  } else if (data.type === "webrtc.offer") {
+    handleOffer(data.offer);
+  } else if (data.type === "webrtc.answer") {
+    handleAnswer(data.answer);
+  } else if (data.type === "webrtc.ice") {
+    handleRemoteIce(data.candidate);
+  }
+};
+
+if (startBtn) startBtn.onclick = startCall;
+if (endBtn) endBtn.onclick = endCall;
+</script>
+{% endblock %}

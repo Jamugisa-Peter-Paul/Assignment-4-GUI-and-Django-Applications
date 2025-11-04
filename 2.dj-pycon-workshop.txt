@@ -1,0 +1,924 @@
+Building a Real-Time Video
+Chat Application with Django
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Introduction
+
+Ever jumped on a Zoom call or FaceTime and wondered about the magic happening behind the scenes? Get ready to uncover those secrets! In this hands-on workshop, we'll build an exciting real-time video chat application using Django that lets people connect face-to-face and communicate instantly in virtual rooms.
+
+What You'll Create ??
+A fully functional video and chat application where users can:
+
+? Join different public chatrooms
+? Have one on one video calls
+
+You can think of this workshop as having two parts, the ?rst whereby you create a chat application to understand websockets, and the second whereby you extend it by adding a video call functionality.
+
+What You'll Learn ??
+1. Websockets Explained Simply
+? What they are and why they're perfect for real time applications
+? How they're different from regular web connections
+2. WebRTC
+? An overview of what they are
+3. Hands-On Development
+? Create your own WebSocket consumer
+? Set up proper routing
+? Create a WebRTC client
+? Build an interactive client interface
+
+Prerequisites
+Before you start make sure you have the following installed:
+
+
+
+
+
+
+
+
+? Python 3.10 and above
+? Django 5
+
+WEBSOCKETS
+
+Websockets sound fancy, and anyone who has never used them will probably think of them as black magic. But, conceptually, they are quite simple!
+Let's ?rst talk about how a traditional HTTP request works. In this world you have a client (usually the browser), and a server (usually the...well, server). The client starts off by sending a request to the server (e.g. "please load this webpage"). The server then processes the request and sends a response to the client (e.g. "here it is!"). Once the content has been delivered to the client, the connection is closed and the request is completed.
+
+
+
+
+
+
+
+
+
+You can think of this HTTP interaction like writing a letter to a pen pal. You send the letter, it gets delivered, your pen pal reads it, and then they send you a response. Each letter gets one and only one response, and everything happens serially.
+If HTTP is like letter-writing, then websockets is like making a phone call. Instead of sending requests and getting responses, the client ?rst opens a connection to the server (i.e. calls someone). Once the connection is established (call is answered), both the client and server can send messages over the channel as much as they want (the conversation). Then, at some point the channel is closed (hanging up) and the conversation is over.
+
+
+
+
+
+
+
+
+
+The main difference between normal HTTP requests and web sockets is the "open channel" where both client and server can send and receive messages at any time. This makes websockets a good choice when you are expecting multiple messages from the server in a row-for example in a chatting UI.
+Now that we have an idea of what WebSockets are, let's discuss a little bit about WebRTC.
+
+
+WebRTC
+WebRTC enables direct peer-to-peer communication between browsers. Unlike WebSockets, which require a server to relay messages between clients, WebRTC allows connected devices to communicate directly with each other without an intermediary server.
+It should be noted that even though WebRTC can allow devices to communicate directly, they still need a signalling server that will securely connect the two devices.
+
+
+This is an overview of how WebRTC connection works:
+- Lets say computer A wants to communicate with computer B via WebRTC
+- Computer A will send an Offer asking for computer B to connect to them
+- The offer generates a session description protocol (SDP) which will describe the peer to peer connection (video codec, timing etc)
+
+
+
+
+
+
+
+- The SDP will be saved on the server and the server will inform computer B about the offer.
+- Computer B will then accept Computer A's offer by sending an SDP answer to the server.
+- The two computers will then communicate with each other directly via a peer-to-peer connection without going through the server.
+So in short:
+1. We will use HTTP requests for displaying regular html pages
+2. We will use WebSockets for sending text messages
+3. We will use WebRTC for video call
+All good? Let's get coding. Please make sure you already have Python and Django installed.
+
+Creating A Chat Application
+Make sure you have Django installed in your virtual environment. If you have any dif?culties, reach out to a mentor.
+Go to your project folder and start by creating a new project with django:
+
+django-admin startproject config .
+
+Then create an app called chat with:
+
+django-admin startapp chat
+
+Then edit the `settings.py` ?le in the `con?g` folder and activate the chat application in your project by editing the `INSTALLED_APPS` setting as follows:
+
+
+
+
+
+
+
+
+
+The chat application is now active in your project. You can con?rm if everything is set by running `python manage.py runserver`. You should see something like this:
+
+
+
+Creating Our Index View:
+
+Let's create our ?rst view in the chat app, go to the view.py folder and add the following:
+
+
+We have de?ned a simple function called index and its task is to render (display) the index.html ?le. We haven't created a html ?le though so let's do that.
+Actually, django being django, to display the page we will have to do the following:
+-	Create a view (which we just did)
+
+
+
+
+
+
+
+- Add our view to urls.py
+- Add our app to the main urls.py which is under the con?g folder (confusing I know)
+- Create a static folder. This is where we will store our css ?les
+- Create a template folder. This is where we will put our html ?les.
+That's quite a lot of con?guration to display one page.
+
+Adding Views To URL Patterns:
+Create a ?le called `urls.py` under the `chat` folder. Then add the following lines of code:
+
+
+What we are basically doing is telling django that whenever someone visits the root url, then displays the index page. The root url is the main url without a slug (eg: 127.0.0.1:8000, www.google.com etc). URLS like 127.0.0.1:8000/chat and www.google.com/search are not root URLs as they contain slugs.
+
+
+Once we add the URL pattern on the app level, we have to include it in the project level. Go to urls.py ?le under the con?g folder, and make the following changes:
+
+
+
+
+
+
+
+
+
+
+
+
+What we are doing is telling django that, 'Listen up django, we have this app called 'chat' and it has its own URL patterns that you must include in the project.' After adding these lines, django has no option but to oblige.
+
+
+Adding The Static Folder
+
+The static folder is where all static ?les like css, javascript, images, icons etc are located. These are ?les that do not change, or at least do not change often.
+For our project, we will only have one static ?le called `styles.css`. You can download it from here.
+Once you've downloaded the css ?le, create a folder called static in the root of your project, then place the css ?le inside it.
+Then update the settings.py ?le under the con?g folder as follows:
+
+
+
+
+
+
+
+
+
+
+We are telling django that the static folder of this project is in the root directory.
+
+Adding The Templates Folder
+
+The templates folder is where we place our html ?les. They are called templates because they contain placeholders and template tags that Django can dynamically ?ll with data from our views and models.
+Templates allow us to create reusable HTML layouts and inject dynamic content while keeping our presentation logic separate from our business logic. By default, Django looks for templates in a 'templates' directory within each installed app.
+But since this is a relatively small project, we will create our template in the root directory. Then we will make the following changes on settings.py:
+
+
+
+
+
+
+
+
+
+And similar to the static folder, we are telling django that templates folder is in the root directory.
+So, by now you should have a structure similar to this in your project:
+
+
+We are almost done. What's left is creating the html pages.
+
+Adding HTML Files To Templates
+We will add two html ?les:
+1. The base.html ?le, which will be the base template for pages in this project.
+2. The index.html ?le, this will extend the base template and will be the home page of our app.
+
+The Base Template
+
+Create a base.html ?le and add the following lines of code:
+
+
+
+
+
+
+
+
+
+
+
+
+What this basically does is:
+? Create the head tags
+? Import CSS stylings
+? Create a block for content
+? Create a block for Javascript
+
+
+
+The Index Template
+
+Now create the index.html ?le and add the following lines of code:
+
+
+
+
+
+
+
+
+
+
+
+
+What this does is:
+? Create a Join chat room card
+? Creates form ?elds
+? The form ?elds are:
+? `username`: Which is the user's name
+? `room_name`: Which is the room the user wants to join to chat
+
+
+
+
+
+
+
+? There is also a CSRF tag, this is for preventing a hacking method called Cross-Site Scripting Attack. The tag is present by default in Django and must be used when submitting forms.
+
+
+Now when you run your django app you will see a beautiful page like this:
+
+
+
+
+Accepting Form Input
+
+
+Now let's update our index view to accept form input:
+
+
+
+
+
+
+
+
+
+
+Whenever a form is submitted it sends a POST request. A POST request is a http method to send data to a server. Other http methods include:
+- GET: Which fetches data
+- DELETE: Which sends a delete request
+- UPDATE: Which sends an update request
+On the view, we will check if the request method is POST, and if yes we will extract the values. For now we will simply extract these values.
+So if you ?ll in values on the index page and click Join Room, you will see the username and room name logged on the terminal:
+
+
+
+
+
+
+
+
+
+
+
+
+
+Now let's create the chat view!
+
+
+The Chat View
+The chat view will be simple. We basically want the user's username and the room they want to join.
+Go to your views.py and add the following:
+
+
+
+This view accepts parameters room_name and username. Then it will render the room.html template and provide the room_name and username values.
+
+
+We don't have a room.html template yet, so let's create that:
+
+
+
+
+
+
+
+
+
+
+This is what the room.html does:
+- Extends the base.html template we already made
+- Renders the title of our chat room and greets the user
+- Creates a nice container for viewing messages
+- Creates an input box for us to type our messages
+- Notice we also render the room_name and username values with:
+```
+{% block include_js %}
+{{ room_name|json_script:"room_name" }}
+{{ username|json_script:"username" }}
+{% endblock %}
+
+
+
+
+
+
+
+
+```
+What this does is creates a script tag for both room_name and username. This is so we can access it later.
+
+
+Now that we have our room.html, let's update the urls.py to include the chatroom view.
+
+
+Update urls.py:
+Go to your urls.py inside the chat folder and update the urlpatterns as follows:
+
+
+We now added a room slug which will call the chatroom view we just created. Notice that the path has two variables, the `room_name` and the `username`.
+
+
+Now if you go to the url `/room/my-room/my-username`, you should see something like this:
+
+
+
+
+
+
+
+
+
+
+
+Awesome right? You did great. Take a ?ve minute break to congratulate yourself. Next we will implement the chat feature, but ?rst - a little theory.
+
+
+Real-time Django with Channels
+You are building a chat server to communicate in a room and exchange messages. This functionality requires real-time communication between the server and the client.
+Think of it like this:
+- Regular websites work like sending letters through mail you have to keep checking your mailbox to see if you got new mail
+- But a chat room needs to work more like a phone call - you hear the other person right away when they speak
+The old way of making websites (where you have to keep checking for updates) isn't good enough for a chat room. It would be like refreshing your page every few seconds to see new messages - that's slow and wastes resources!
+Instead, we need a special way where:
+- When someone sends a message, it appears on everyone's screen right away
+- You don't need to keep checking or refreshing the page
+- The server can instantly "push" new messages to everyone in the chat
+This is called "asynchronous communication" - it's like having an open phone line where messages can ?ow freely both ways.
+This makes the chat:
+- Faster
+- More ef?cient
+- More like a real conversation
+
+
+
+
+
+
+
+
+We're going to build this chat room using something called ASGI, which helps us create this instant, two-way communication.
+
+Making Your Chat Room Work Better ASGI
+Normally, Django works in a simple back-and-forth way:
+
+- Your browser asks for something
+
+- The website responds
+
+- And that's it until you ask for something else
+
+This way of deploying Django is called Web Server Gateway Interface (WSGI). But for a chat room, we need something better. We need a system that can:
+- Keep connections open
+
+- Send messages instantly
+
+- Handle many people chatting at once This is where two important tools come in:
+1. ASGI (think of it as an "upgraded version" of how Django usually works):
+- Asynchronous Server Gateway interface allows for asynchronous communication. It's newer and faster
+- It can handle real-time stuff
+
+- Perfect for chat rooms!
+
+2. Channels (an extra tool that makes ASGI even better):
+- Helps manage ongoing connections
+
+- Great for chat rooms and similar apps
+
+
+
+
+
+
+
+- Makes everything run smoothly
+
+So now we will upgrade our app from just using http, to giving it the ability to use both http and websockets.
+
+
+Installing Channel In Django
+Since we are now changing our django app from using WSGI to ASGI, we will have to install a channels package. Install it with:
+
+Then update the INSTALLED_APPS inside the settings.py to include 'daphne' as follows:
+
+
+Notice that `daphne` has to be the ?rst item in INSTALLED_APPS, otherwise it will not work.
+
+
+Then you will have to enable asgi support in django. Go to the `asgi.py` ?le inside con?g, and write the following:
+
+
+
+
+
+
+
+
+
+
+We de?ne the main ASGI application that will be executed when serving the Django project through ASGI. You use the ProtocolTypeRouter class provided by Channels as the main entry point of your routing system. ProtocolTypeRouter takes a dictionary that maps communication types like http or websocket to ASGI applications. We instantiate this class with the default application for the HTTP protocol. Later, we will add a protocol for the WebSocket.
+Finally we will update the settings.py as follows:
+
+
+
+Now if we run our application with:
+
+
+
+
+
+
+
+
+
+We should see something like this:
+
+
+
+Notice the `Starting ASGI/Daphne`, this tells us that our django is now running via ASGI.
+
+
+Now that our django app is upgraded, let's give it the ability to accept websocket protocols. For HTTP requests, what we usually do is:
+- De?ne the view
+- Add it to the app urls
+- Add the app urls to the project urls
+We are going to do the same thing for websockets:
+- De?ne a consumer
+- Con?gure websocket urls (called routes)
+- Add the app routes to the project urls
+
+
+Setting Up A Consumer
+
+Consumers are the equivalent of Django views for asynchronous applications. As mentioned, they handle WebSockets in a very similar way to how traditional views handle HTTP requests.
+Consumers are ASGI applications that can handle messages, noti?cations, and other things. Unlike Django views, consumers are built for long-running communication. URLs are mapped to consumers through routing classes that allow you to combine and stack consumers.
+
+
+
+
+
+
+
+
+Let's implement a basic consumer that can accept WebSocket connections and echoes every message it receives from the WebSocket back to it. This initial functionality will allow the student to send messages to the consumer and receive back the messages it sends.
+Create a new ?le inside the chat application directory and name it consumers.py. Add the following code to it:
+
+This is the ChatConsumer consumer. This class inherits from the Channels AsyncWebsocketConsumer class to implement a basic WebSocket consumer. In this consumer, you implement the following methods:
+• connnect(): Called when a new connection is received. You accept any connection with self.accept(). You can also reject a connection by calling self.close().
+• disconnect(): Called when the socket closes. You use pass because you don't need to implement any action when a client closes the connection.
+• receive(): Called whenever data is received from the WebSocket. You expect text to be received as text_data (this could also be binary_data for binary data). You treat the text data received as JSON. Therefore, you use json.loads() to load the received JSON data into a Python dictionary. You access the message key, which you expect to be present in the JSON structure received. To
+
+
+
+
+
+
+
+echo the message, you send the message back to the WebSocket with self.send(), transforming it into JSON format again through json.dumps().
+The initial version of your ChatConsumer consumer accepts any WebSocket connection and echoes to the WebSocket client every message it receives. Note that the consumer does not broadcast messages to other clients yet. You will build this functionality by implementing a channel layer later.
+First, let's expose our consumer by adding it to the URLs of the project.
+
+
+Routing
+
+You need to de?ne a URL to route connections to the ChatConsumer consumer you have implemented.
+Channels provides routing classes that allow you to combine and stack consumers to dispatch based on what the connection is. You can think of them as the URL routing system of Django for asynchronous applications.
+Create a new ?le inside the chat application directory and name it routing.py. Add the following code to it:
+
+
+In this code, you map a URL pattern with the ChatConsumer class that you de?ned in the chat/consumers.py ?le. There are some details that are worth reviewing:
+- You use Django's path() to de?ne the path just as how you do it on urls.py
+- The URL includes two parameters: room_name and username. These parameters will be available in the scope of the consumer and will allow you to identify the chat room the user is connecting to.
+
+
+
+
+
+
+
+- You call the as_asgi() method of the consumer class in order to get an ASGI application that will instantiate an instance of the consumer for each user connection. This behavior is similar to Django's as_view() method for class-based views.
+Now let's add these routes to the main route. Go to the asgi.py ?le and add the following:
+
+
+Note that we have de?ned two protocols:
+1. For http we tell it to use django's default urls
+   2. For websocket we use the websocket_urlpatterns we de?ned in routing.py Now let us give the browser the ability to connect to the websocket.
+Implementing the WebSocket client
+Now this is a django workshop, but unfortunately since we are dealing with the browser we are forced to write some javascript. For now don't worry too much about it, I have added comments to explain what they do but if you do not understand it, don't worry.
+Go to your room.html ?le, and on the `domready` block add the following lines of code:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+So for now if you got to `/room/test-room/rose` you will see something like this:
+
+
+
+
+Enabling A Channel Layer
+Currently with our application, if two people join the same room, they will not be able to communicate with each other. This is because they are in separate channels.
+To overcome this, we will add a channel layer to enable people in the same room to be able to talk to each other.
+The channel layer has two parts to manage communication:
+Channels: these are like personal mailboxes:
+
+? Each mailbox (channel) has a unique address (name)
+? Anyone who knows your address can send you letters (messages)
+? Only you can check and read your mailbox (consume messages)
+
+Groups: these are like mailing lists:
+
+
+
+
+
+
+
+? A mailing list (group) has a name
+? Multiple mailboxes (channels) can be part of the list
+? When someone sends a message to the mailing list, everyone on the list gets a copy
+   ? People (channels) can join or leave the list at any time In our use case:
+? A chat application might give each user their own channel for private messages
+? All users in a chat room might be part of a group, so when someone sends a message to the group, everyone in the chat room receives it
+We will use an InMemory channel layer by adding this on con?g/settings.py:
+
+
+You can check if you can connect to the channel by ?rst running this command:
+
+
+Then run these:
+
+
+You should get the following output:
+
+
+You have successfully set up the channel layer. Good job!
+
+
+
+
+
+
+
+
+Updating The Consumer To Broadcast Messages
+Now that we have the channel layer, let's update the consumer to use it. We want that whenever we receive a message, we update everyone connected to the channel with that message.
+Modify the connect method in consumer.py as follows:
+
+
+The code above does the following:
+- We retrieve the username and room_name from the url. Remember we de?ned the url as:
+
+
+So it can get the username and the room name by extracting it from the url.
+- Once we get the room_name and username, we just add them to a group.
+- Then ?nally, we add a self.accept() to accept incoming websocket connections.
+Let's also update the disconnect method so that we can remove a user from the channel layer. Add the following lines to disconnect method:
+
+
+
+
+
+
+
+
+
+We remove them from the channel by using group_discard().
+Lastly we will update the receive method so that we can broadcast the received message to the group.
+Let's import the django's time utility:
+
+
+Then update the receive function:
+
+
+- In the code above we get the data received which is json format, then we extract the message content and assign it to a variable. We get the time it was sent and assign it to the now variable.
+- We then broadcast the message with group_send, we provide the room_name to broadcast to. And we include the data we want to send which are:
+- message: ie the message
+- user: which is the username
+- datetime: which is the time it was sent
+- The type is a special ?eld, and here we provide the function we want to use for broadcasting the message. Let's create that function:
+
+
+
+
+
+
+
+
+
+
+This function simply sends the message.
+The full consumer.py ?le should look like this:
+
+
+
+
+
+
+
+
+
+And voila, that's it. We now have a complete chat application in django. Give it a try by opening two browsers, connect to the same room and send messages.
+
+
+
+
+
+
+
+
+
+
+
+Adding Video Call Capabilities
+Now that we have successfully created a realtime chat application, let's extend it by adding a video call functionality with WebRTC.
+As discussed in the WebRTC section, our django server will act as a signalling server to connect the devices that want to video call. After that the devices will communicate directly without interacting with the server.
+Let's start by creating an app called call with:
+
+django-admin startapp call
+
+Then let's include in our settings.py:
+
+
+
+Let's then create a video call view. Add this under call/views.py:
+
+
+
+
+
+
+
+
+
+
+But we do not have a call.html yet, so we will have to create. Before we do though, let's pause a little and think of what we are trying to do.
+- We want to a have a page where by someone can enter their username
+- We will then give them an option of entering the username of the person they want to call
+- We then want the recipient to receive the calling noti?cation
+- And if they answer, we want to stream the contents of the video call to both the caller and callee
+- Since the contents of the video call itself will be sent from device to device directly without the server, it means we will have to write some javascript.
+
+
+Let's start with the html, create a call.html ?le under the templates folder, and add the following lines:
+
+
+
+
+
+
+
+
+
+
+Here is a little explanation:
+
+
+
+
+
+
+
+
+- We have a login section which is where we get the username of the caller. When the user presses the login button it will call a javascript function called login(). We will create this function shortly.
+- The User Info Section is basically the Hello + username
+- The Call Section is where we put the user we want to call. Then when we click the call button, the button will call the javascript call() function. We haven't made this yet.
+- The Answer Section is what will be displayed when a user is receiving a call. When they call the answer button, it will run the javascript function answer(). We haven't made this yet.
+- The Calling Section is what will be displayed when we are calling someone.
+- The In Call Section basically shows the On Call With + username message
+- The Video Section is the part that actually shows the video. The localVideo is the caller and the remoteVideo is the one being called.
+NB: Download the dj-pro?le.jpg image here: https://github.com/pythontanzania/DjangoGirlsWorkShopNov24/blob/main/static/images/dj-pr o?le.jpg and put the image under static/images/
+Then add the following block in call.html:
+
+
+
+
+
+
+
+
+
+Some more explanation:
+- We import a call.js ?le, we haven't created this yet so do not worry about it for now.
+- We then get all the sections we de?ned earlier except for login and hide them.
+- Then we de?ne the login() function which is run when a user presses the login button. What this function does is get the username, set the message Hello + username . It will then hide the login section and show the User Info and Call Sections.
+- It will then call the connectSocket() javascript function. We haven't created this yet.
+
+
+Pat yourself in the back for reaching this far! What's left to ?nish the video call functionality is to:
+
+- Create the consumer in the call app
+- Add websocket routing to the call app
+- Add the WebRTC javascript
+
+Adding A Consumer to the Call App
+The call consumer will be very similar to the chat consumer we made earlier. Create a
+consumer.py ?le inside the call app and write the following:
+
+
+
+
+
+
+
+
+
+We create a consumer class just like in the chat app. We then create a connect function that will accept new websocket connections. We then send a response telling them they have successfully connected. We will also need a disconnect function to handle when a user disconnects. So let's write that:
+
+
+What this does is remove the connected user from the channel group. Finally, just like on the chat app, we will need a receive function to handle incoming requests. Since we are expecting to receive different types of messages (call someone, answer calls etc) we will have to check the type of each content and handle it. Let's start with handling login:
+
+
+All messages we receive will have a type part and a data part. When we receive the login type we will add whoever logged in into a channel group. We haven't written the javascript part but this is what it sends (don't write this):
+
+
+
+
+
+
+
+
+
+
+It will tell the server that this is a login type, and the data is name: myName which is the username of the person calling. This is the name we extract and add to a group.
+
+
+The next event type we expect is call, so let's handle that. Add the following if-statement
+to the consumer.py ?le:
+
+
+We extract the name of the person we want to call. We then notify the callee that someone is trying to call them. We do that by calling the call_received function and sending the
+
+
+
+
+
+
+
+relevant data. We don't have a call_received function yet, so let's write it. Add the following function to consumers.py:
+
+
+This simply noti?es the user that they are being called. This is the javascript block that handles the various types we send to it:
+
+
+
+
+
+
+
+
+
+So it is similar to our consumers.py ?le, it also checks what type is being received and handles accordingly. We can see that the onNewCall function will hide irrelevant elements in the html and show the answer section we wrote on the html.
+
+
+Now that we already handle calling on the consumers.py ?le, let's handle answering a call. On the list of if-statements inside the receive function, add this:
+
+
+What this does is extract the caller's name and then runs the call_answered function. We don't have a call_answered function yet so let's write it:
+
+
+This simply sends a message to the javascript that they have answered the call and that they can start the video call. This is what the javascript looks like (don't write this):
+
+
+
+
+
+
+
+
+
+
+We're almost done. Remember that WebRTC is a peer to peer connection, meaning that devices communicate directly with no server in between. To ensure that this connection is reliable, there is something called Interactive Connectivity Establishment (ICE). The purpose of this is to represent various ways two peers can connect to each other. This is to ensure reliability. So we will have to add this on the receive function on our consumer.py ?le. Add the following if -statement:
+
+
+This will receive the various ICE candidates and send them to the javascript via the
+ICEcandidate function. We don't have that function yet so let's write it:
+
+
+
+
+
+
+
+
+
+This basically forwards the received information as is. For the curious, this is how the javascript handles the ICE data (don't write this):
+
+
+
+We're ?nally done with the consumer.py ?le. Your consumer.py ?le in the call app should look like this:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Adding Consumer Routes To Call App
+We should then add a routing.py ?le similar to how we did in the chat app. Create a
+routing.py ?le inside the call app and write this:
+
+
+
+
+
+
+
+
+
+This just creates a websocket url which is ws/call/. We then have to update the asgi.py ?le to include this new router:
+
+
+
+And we are all set. Last but not least we have to include the call.js ?le. Go to https://raw.githubusercontent.com/pythontanzania/DjangoGirlsWorkShopNov24/refs/heads/ma in/static/js/call.js and paste its content in call.js ?le. This ?le should be under static/js/call.js.
+
+
+And congratulations, you have integrated video call capabilities. Here's a screenshot of a working demo:
+
+
+
+
+
+
+
+
+	

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Rooms{% endblock %}
+{% block content %}
+<h1>Rooms</h1>
+<form method="get" action=".">
+    <input type="text" name="q" placeholder="Search rooms..." value="{{ q|default:'' }}" />
+    <button type="submit">Search</button>
+</form>
+<p>Total rooms: {{ stats.total_rooms }} | Total users: {{ stats.total_users }}</p>
+{% if user.is_authenticated %}
+    <p><a href="{% url 'room_create' %}">Create New Room</a></p>
+{% endif %}
+<ul>
+    {% for room in rooms %}
+        <li><a href="{% url 'room_detail' room.name %}">{{ room.name }}</a></li>
+    {% empty %}
+        <li>No rooms yet.</li>
+    {% endfor %}
+</ul>
+{% endblock %}

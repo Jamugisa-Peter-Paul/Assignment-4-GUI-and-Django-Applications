@@ -1,0 +1,10 @@
+body { font-family: Arial, sans-serif; margin: 0; background: #f7f7f7; }
+.nav { background: #333; color: #fff; padding: 10px; display: flex; gap: 10px; }
+.nav a { color: #fff; text-decoration: none; }
+.nav-user { margin-left: auto; }
+.container { padding: 20px; }
+.error { color: #b00020; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.video-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #111; padding: 10px; }
+video { width: 100%; background: #000; }
+.controls button { margin-right: 8px; }

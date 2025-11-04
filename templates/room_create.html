@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Create Room{% endblock %}
+{% block content %}
+<h2>Create Room</h2>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post">
+    {% csrf_token %}
+    <label>Room Name</label>
+    <input name="name" />
+    <button type="submit">Create</button>
+</form>
+{% endblock %}
