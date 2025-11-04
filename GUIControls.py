@@ -1,7 +1,7 @@
 import sys
 from tkinter import Tk
 from MyFrame import MyFrame
-
+#main
 def main():
     root = Tk()
     root.geometry("700x600")
